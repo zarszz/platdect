@@ -1,31 +1,34 @@
 import os.path
-import argparse
 
-from detector import detect
+from detector import detect, load_model
+from flask import Flask, render_template, request
 
-
-def load_model():
-    dirname = os.path.dirname(__file__)
-    cfg = os.path.join(dirname, 'input/plate.cfg')
-    weights = os.path.join(dirname, 'input/plate.weights')
-    label = ['Plate']
-    return cfg, weights, label
+app = Flask(__name__)
+cfg, weights, classes = load_model()
 
 
-def main():
-    cfg, weights, classes = load_model()
-    parser = argparse.ArgumentParser(description="Deteksi plat nomor pada kendaraan")
-    sub_parser = parser.add_subparsers(title="daftar perintah", dest="command")
+@app.route('/')
+def index():
+    return render_template('upload.html')
 
-    parser_detect = sub_parser.add_parser('detect', help='Deteksi plat nomor')
-    parser_detect.add_argument('input', type=str)
 
-    args = parser.parse_args()
-    image = args.input
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    file = request.files['photo']
 
-    detect(image, cfg, weights, classes)
+    # save image file to directory
+    file_path = os.path.join(os.getcwd(), 'images', file.filename)
+    file.save(file_path)
+
+    # perform object detection
+    confidences, no_of_detected, class_ids = detect(file_path, cfg, weights, classes, save_img=True)
+    if no_of_detected > 0:
+        accuracy = float("{:.2f}".format(confidences[0])) * 100
+        return render_template('upload.html', filename=file.filename, accuracy=accuracy, success_detected=True)
+    else:
+        return render_template('upload.html', filename=file.filename, success_detected=False)
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    main()
+    app.run("0.0.0.0", 5000, debug=True)
